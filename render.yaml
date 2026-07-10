@@ -9,9 +9,15 @@ services:
     buildCommand: pip install -e . && alembic upgrade head
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/health
+    # Keep-warm: the starter plan already avoids free-tier cold starts. As
+    # defense-in-depth, an external uptime pinger hits /api/health every ~10 min
+    # (see DEPLOY.md "Keep-warm") — chosen over a Render cron service to keep the
+    # blueprint simple and avoid an extra paid worker.
     envVars:
       - key: PYTHON_VERSION
         value: "3.12"
+      - key: ENVIRONMENT
+        value: production # disables dev auth-bypass + local storage fallback
       - key: REDIS_URL
         fromService:
           name: notebooklm-redis
@@ -23,10 +29,14 @@ services:
         sync: false
       - key: CLERK_ISSUER
         sync: false
+      - key: CLERK_AUDIENCE
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
         sync: false
+      - key: SUPABASE_STORAGE_BUCKET
+        value: documents
       - key: OPENROUTER_API_KEY
         sync: false
       - key: EMBEDDINGS_API_KEY
@@ -35,6 +45,8 @@ services:
         sync: false
       - key: CORS_ORIGINS
         sync: false
+      - key: MAX_UPLOAD_MB
+        value: "25" # max accepted upload size (MB); not secret
       - key: SENTRY_DSN
         sync: false
 
@@ -48,6 +60,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12"
+      - key: ENVIRONMENT
+        value: production # ensures Supabase storage (not local ./uploads fallback)
       - key: REDIS_URL
         fromService:
           name: notebooklm-redis

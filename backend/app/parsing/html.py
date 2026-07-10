@@ -1,7 +1,6 @@
-import httpx
-
 from app.models.enums import SourceType
 from app.parsing.base import ParsedDocument, TextBlock, register
+from app.utils.net import safe_get
 
 
 def _extract_main_text(html: str, url: str | None) -> str:
@@ -34,12 +33,8 @@ class UrlParser:
     def parse(self, *, data: bytes | None, url: str | None, filename: str) -> ParsedDocument:
         if not url:
             raise ValueError("URL parser requires a source url")
-        resp = httpx.get(
-            url,
-            follow_redirects=True,
-            timeout=30.0,
-            headers={"User-Agent": "NotebookLM-clone/0.1 (+https://example.com)"},
-        )
+        # safe_get applies the SSRF guard (scheme + resolved-IP checks) on every redirect hop.
+        resp = safe_get(url, timeout=30.0)
         resp.raise_for_status()
         text = _extract_main_text(resp.text, url)
         title = None

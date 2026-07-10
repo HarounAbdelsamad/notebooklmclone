@@ -35,3 +35,10 @@ def extract_chat_facts(chat_id: str) -> None:
     from app.chat.maintenance import extract_facts
 
     asyncio.run(extract_facts(chat_id))
+
+
+@celery.task(name="embed_note")
+def embed_note(note_id: str) -> None:
+    from app.notes.embedding import embed_note as _embed_note
+
+    asyncio.run(_embed_note(note_id))

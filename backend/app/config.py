@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     rerank_base_url: str = "https://api.deepinfra.com/v1/inference"
     rerank_model: str = "BAAI/bge-reranker-v2-m3"
 
+    # ---- Uploads ----
+    max_upload_mb: int = 25
+
     # ---- Retrieval tuning ----
     retrieval_top_k: int = 40
     rerank_top_n: int = 8

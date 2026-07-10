@@ -13,12 +13,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_owned_notebook
+from app.config import settings
 from app.db.session import get_db
 from app.models.document import Document
 from app.models.enums import DocumentStatus, SourceType
 from app.models.workspace import Notebook
 from app.schemas.document import DocumentOut, UrlIngestRequest
 from app.services.storage import build_storage_path, upload_bytes
+from app.utils.uploads import read_upload_capped
 from app.workers.tasks import ingest_document
 
 router = APIRouter(prefix="/notebooks/{notebook_id}/documents", tags=["documents"])
@@ -45,7 +47,7 @@ async def upload_document(
     db: AsyncSession = Depends(get_db),
 ) -> Document:
     """Upload a file, persist it to object storage, and queue ingestion."""
-    data = await file.read()
+    data = await read_upload_capped(file, settings.max_upload_mb * 1024 * 1024)
     storage_path = build_storage_path(notebook.id, file.filename or "upload")
     await upload_bytes(storage_path, data, content_type=file.content_type)
 

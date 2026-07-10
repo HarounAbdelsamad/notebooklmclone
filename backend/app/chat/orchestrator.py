@@ -10,10 +10,10 @@ import re
 import uuid
 from collections.abc import AsyncIterator
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.chat.memory import build_memory
+from app.chat.memory import RECENT_MESSAGE_LIMIT, build_memory
 from app.embedding.client import embed_query
 from app.models.chat import Chat, Message, MessageCitation
 from app.models.enums import MessageRole
@@ -26,6 +26,35 @@ from app.utils.tokenizer import count_tokens
 logger = logging.getLogger(__name__)
 
 _CITATION_RE = re.compile(r"\[(\d+)\]")
+
+# Once a chat grows past the live recent window, roll older turns into a summary + facts. Fire
+# only on interval boundaries (each turn adds 2 messages) so we don't re-summarize every message
+# or schedule duplicate jobs.
+MAINTENANCE_INTERVAL_MESSAGES = 8
+
+
+def _maintenance_due(message_count: int) -> bool:
+    return (
+        message_count > RECENT_MESSAGE_LIMIT and message_count % MAINTENANCE_INTERVAL_MESSAGES == 0
+    )
+
+
+async def _schedule_memory_maintenance(db: AsyncSession, chat_id: uuid.UUID) -> None:
+    """Enqueue rolling-summary + fact-extraction jobs when the chat crosses an interval
+    boundary. Enqueue failures are logged and swallowed so they never break the chat response."""
+    try:
+        count = await db.scalar(
+            select(func.count()).select_from(Message).where(Message.chat_id == chat_id)
+        )
+        if count is None or not _maintenance_due(count):
+            return
+        # Lazy import keeps the Celery app out of the request-path import graph.
+        from app.workers.tasks import extract_chat_facts, summarize_chat
+
+        summarize_chat.delay(str(chat_id))
+        extract_chat_facts.delay(str(chat_id))
+    except Exception:  # noqa: BLE001 — scheduling is best-effort; never fail the response
+        logger.warning("Failed to schedule chat memory maintenance", exc_info=True)
 
 
 def _sse(event: str, data) -> dict:
@@ -135,8 +164,8 @@ async def stream_answer(
             )
             citations_payload.append(
                 {
-                    "chunk_id": str(src.chunk_id),
-                    "document_id": str(src.document_id),
+                    "chunk_id": str(src.chunk_id) if src.chunk_id else None,
+                    "document_id": str(src.document_id) if src.document_id else None,
                     "snippet": src.content[:500],
                     "page_number": src.page_number,
                     "score": src.score,
@@ -144,6 +173,9 @@ async def stream_answer(
                 }
             )
         await db.commit()
+
+        # Turn is persisted; roll memory forward if the chat has outgrown the recent window.
+        await _schedule_memory_maintenance(db, chat.id)
 
         yield _sse("citations", citations_payload)
         yield _sse("done", {"chat_id": str(chat.id), "message_id": str(assistant.id)})

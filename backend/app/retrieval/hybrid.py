@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.document import Chunk
+from app.models.note import Note
 from app.services import rerank as rerank_service
 
 logger = logging.getLogger(__name__)
@@ -19,11 +20,13 @@ _RRF_K = 60  # standard RRF damping constant
 
 @dataclass
 class RetrievedChunk:
-    chunk_id: uuid.UUID
-    document_id: uuid.UUID
+    # For note-sourced hits, ``chunk_id`` / ``document_id`` are None and ``note_id`` is set.
+    chunk_id: uuid.UUID | None
+    document_id: uuid.UUID | None
     content: str
     page_number: int | None
     score: float
+    note_id: uuid.UUID | None = None
 
 
 async def _vector_search(
@@ -33,6 +36,18 @@ async def _vector_search(
         select(Chunk)
         .where(Chunk.notebook_id == notebook_id, Chunk.embedding.isnot(None))
         .order_by(Chunk.embedding.cosine_distance(query_embedding))
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
+async def _note_vector_search(
+    db: AsyncSession, notebook_id: uuid.UUID, query_embedding: list[float], limit: int
+) -> list[Note]:
+    result = await db.execute(
+        select(Note)
+        .where(Note.notebook_id == notebook_id, Note.embedding.isnot(None))
+        .order_by(Note.embedding.cosine_distance(query_embedding))
         .limit(limit)
     )
     return list(result.scalars().all())
@@ -51,13 +66,14 @@ async def _fts_search(
     return list(result.scalars().all())
 
 
-def _rrf_fuse(*ranked_lists: list[Chunk]) -> list[Chunk]:
+def _rrf_fuse(*ranked_lists: list) -> list:
+    """Reciprocal-rank-fuse ranked lists of objects that expose an ``.id`` (Chunk or Note)."""
     scores: dict[uuid.UUID, float] = {}
-    objects: dict[uuid.UUID, Chunk] = {}
+    objects: dict[uuid.UUID, object] = {}
     for ranked in ranked_lists:
-        for rank, chunk in enumerate(ranked):
-            scores[chunk.id] = scores.get(chunk.id, 0.0) + 1.0 / (_RRF_K + rank + 1)
-            objects[chunk.id] = chunk
+        for rank, item in enumerate(ranked):
+            scores[item.id] = scores.get(item.id, 0.0) + 1.0 / (_RRF_K + rank + 1)
+            objects[item.id] = item
     ordered_ids = sorted(scores, key=lambda cid: scores[cid], reverse=True)
     return [objects[cid] for cid in ordered_ids]
 
@@ -68,11 +84,14 @@ async def hybrid_retrieve(
     query_text: str,
     query_embedding: list[float],
     top_k: int | None = None,
-) -> list[Chunk]:
+) -> list:
+    """Return fused Chunk/Note candidates. Notes with a populated embedding participate via a
+    parallel vector search and are ranked alongside document chunks."""
     top_k = top_k or settings.retrieval_top_k
     vector_hits = await _vector_search(db, notebook_id, query_embedding, top_k)
     fts_hits = await _fts_search(db, notebook_id, query_text, top_k)
-    return _rrf_fuse(vector_hits, fts_hits)[:top_k]
+    note_hits = await _note_vector_search(db, notebook_id, query_embedding, top_k)
+    return _rrf_fuse(vector_hits, fts_hits, note_hits)[:top_k]
 
 
 async def retrieve_and_rerank(
@@ -96,13 +115,23 @@ async def retrieve_and_rerank(
         logger.warning("Reranker unavailable; falling back to RRF ordering", exc_info=True)
         ranked = [(c, 1.0 / (i + 1)) for i, c in enumerate(candidates)]
 
-    return [
-        RetrievedChunk(
-            chunk_id=c.id,
-            document_id=c.document_id,
-            content=c.content,
-            page_number=c.page_number,
-            score=float(score),
+    return [_to_retrieved(c, float(score)) for c, score in ranked[:top_n]]
+
+
+def _to_retrieved(candidate, score: float) -> RetrievedChunk:
+    if isinstance(candidate, Note):
+        return RetrievedChunk(
+            chunk_id=None,
+            document_id=None,
+            content=candidate.content,
+            page_number=None,
+            score=score,
+            note_id=candidate.id,
         )
-        for c, score in ranked[:top_n]
-    ]
+    return RetrievedChunk(
+        chunk_id=candidate.id,
+        document_id=candidate.document_id,
+        content=candidate.content,
+        page_number=candidate.page_number,
+        score=score,
+    )
