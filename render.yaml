@@ -1,0 +1,73 @@
+# Render blueprint: API web service + Celery worker + Redis.
+# Postgres + Storage are provided by Supabase (set DATABASE_URL / SUPABASE_* below).
+services:
+  - type: web
+    name: notebooklm-api
+    runtime: python
+    rootDir: backend
+    plan: starter # avoid free-tier cold starts that break SSE streaming
+    buildCommand: pip install -e . && alembic upgrade head
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: REDIS_URL
+        fromService:
+          name: notebooklm-redis
+          type: redis
+          property: connectionString
+      - key: DATABASE_URL
+        sync: false
+      - key: CLERK_JWKS_URL
+        sync: false
+      - key: CLERK_ISSUER
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: EMBEDDINGS_API_KEY
+        sync: false
+      - key: RERANK_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+
+  - type: worker
+    name: notebooklm-worker
+    runtime: python
+    rootDir: backend
+    plan: starter
+    buildCommand: pip install -e .
+    startCommand: celery -A app.workers.celery_app.celery worker --loglevel=info --concurrency=2
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12"
+      - key: REDIS_URL
+        fromService:
+          name: notebooklm-redis
+          type: redis
+          property: connectionString
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: EMBEDDINGS_API_KEY
+        sync: false
+      - key: RERANK_API_KEY
+        sync: false
+
+  - type: redis
+    name: notebooklm-redis
+    plan: starter
+    maxmemoryPolicy: noeviction # Celery broker must not evict queued tasks
+    ipAllowList: []
