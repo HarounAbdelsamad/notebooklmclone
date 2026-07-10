@@ -38,11 +38,8 @@ services:
       - key: SUPABASE_STORAGE_BUCKET
         value: documents
       - key: OPENROUTER_API_KEY
-        sync: false
-      - key: EMBEDDINGS_API_KEY
-        sync: false
-      - key: RERANK_API_KEY
-        sync: false
+        sync: false # also powers embeddings + rerank (NVIDIA Nemotron models on OpenRouter).
+        # EMBEDDINGS_API_KEY / RERANK_API_KEY are optional overrides; unset, they fall back to this.
       - key: CORS_ORIGINS
         sync: false
       - key: MAX_UPLOAD_MB
@@ -74,11 +71,7 @@ services:
       - key: SUPABASE_SERVICE_KEY
         sync: false
       - key: OPENROUTER_API_KEY
-        sync: false
-      - key: EMBEDDINGS_API_KEY
-        sync: false
-      - key: RERANK_API_KEY
-        sync: false
+        sync: false # also powers ingestion embeddings (NVIDIA Nemotron on OpenRouter).
 
   - type: redis
     name: notebooklm-redis

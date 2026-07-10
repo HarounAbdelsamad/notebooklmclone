@@ -35,14 +35,15 @@ class Settings(BaseSettings):
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     llm_model: str = "meta-llama/llama-3.3-70b-instruct"
 
-    # ---- Embeddings + Rerank ----
+    # ---- Embeddings + Rerank (NVIDIA Nemotron via OpenRouter) ----
+    # Keys default to OPENROUTER_API_KEY (see effective_* properties) but can be overridden.
     embeddings_api_key: str = ""
-    embeddings_base_url: str = "https://api.deepinfra.com/v1/openai"
-    embedding_model: str = "BAAI/bge-m3"
+    embeddings_base_url: str = "https://openrouter.ai/api/v1"
+    embedding_model: str = "nvidia/llama-nemotron-embed-vl-1b-v2:free"
     embedding_dim: int = 1024
     rerank_api_key: str = ""
-    rerank_base_url: str = "https://api.deepinfra.com/v1/inference"
-    rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    rerank_base_url: str = "https://openrouter.ai/api/v1"
+    rerank_model: str = "nvidia/llama-nemotron-rerank-vl-1b-v2:free"
 
     # ---- Uploads ----
     max_upload_mb: int = 25
@@ -68,6 +69,16 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.environment.lower() in {"production", "prod"}
+
+    @property
+    def effective_embeddings_api_key(self) -> str:
+        """Embeddings key, defaulting to the OpenRouter key when unset."""
+        return self.embeddings_api_key or self.openrouter_api_key
+
+    @property
+    def effective_rerank_api_key(self) -> str:
+        """Rerank key, defaulting to the OpenRouter key when unset."""
+        return self.rerank_api_key or self.openrouter_api_key
 
 
 @lru_cache
