@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCreateNotebook, useDeleteNotebook, useNotebooks } from "../api/hooks";
 import { MoreVerticalIcon, TrashIcon } from "../components/icons";
+import { Modal } from "../components/Modal";
 import type { Notebook } from "../api/types";
 
 function formatCreatedAt(createdAt: string): string | null {
@@ -16,6 +17,7 @@ function formatCreatedAt(createdAt: string): string | null {
 
 function NotebookCard({ notebook }: { notebook: Notebook }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const deleteNotebook = useDeleteNotebook();
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -37,14 +39,15 @@ function NotebookCard({ notebook }: { notebook: Notebook }) {
     };
   }, [menuOpen]);
 
-  const handleDelete = () => {
+  const openConfirm = () => {
     setMenuOpen(false);
-    const confirmed = window.confirm(
-      `Permanently delete "${notebook.title}"? This will also delete all of its documents, notes, chats, and generated outputs. This cannot be undone.`,
-    );
-    if (confirmed) {
-      deleteNotebook.mutate(notebook.id);
-    }
+    setConfirmOpen(true);
+  };
+
+  const confirmDelete = () => {
+    deleteNotebook.mutate(notebook.id, {
+      onSuccess: () => setConfirmOpen(false),
+    });
   };
 
   const created = formatCreatedAt(notebook.created_at);
@@ -89,8 +92,11 @@ function NotebookCard({ notebook }: { notebook: Notebook }) {
               type="button"
               role="menuitem"
               className="dropdown-menu-item danger"
-              disabled={deleteNotebook.isPending}
-              onClick={handleDelete}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openConfirm();
+              }}
             >
               <TrashIcon />
               Delete notebook
@@ -98,6 +104,33 @@ function NotebookCard({ notebook }: { notebook: Notebook }) {
           </div>
         )}
       </div>
+
+      {confirmOpen && (
+        <Modal title="Delete notebook?" onClose={() => setConfirmOpen(false)}>
+          <p style={{ marginTop: 0 }}>
+            Permanently delete <strong>{notebook.title}</strong>? This will also delete all of its
+            documents, notes, chats, and generated outputs. This cannot be undone.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => setConfirmOpen(false)}
+              disabled={deleteNotebook.isPending}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={confirmDelete}
+              disabled={deleteNotebook.isPending}
+              style={{ background: "var(--danger)", borderColor: "var(--danger)", color: "#fff" }}
+            >
+              {deleteNotebook.isPending ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
