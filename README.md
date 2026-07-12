@@ -14,8 +14,8 @@ cited RAG — plus notes, generated outputs, and cross-content search.
 | DB / vectors     | Supabase Postgres + pgvector                                      |
 | File storage     | Supabase Storage                                                  |
 | LLM              | OpenRouter (open models: Llama 3.3 / Qwen 2.5)                    |
-| Embeddings       | `BAAI/bge-m3` (1024-dim) via DeepInfra                            |
-| Rerank           | `BAAI/bge-reranker-v2-m3` via DeepInfra                           |
+| Embeddings       | `nvidia/llama-nemotron-embed-vl-1b-v2` (2048-d → truncated 1024) via OpenRouter |
+| Rerank           | `nvidia/llama-nemotron-rerank-vl-1b-v2` via OpenRouter            |
 | Monitoring       | Sentry                                                            |
 
 ### RAG pipeline

@@ -15,6 +15,12 @@ Architecture recap: React/Vite frontend on **Vercel** → FastAPI + Celery on **
 
 ## 1. Supabase (database + storage)
 
+> ✅ **Already provisioned for this project** (`NotebookLMClone` / ref `tisgrflxwgwpqwcszzfw`,
+> eu-west-1) via the Supabase MCP: baseline schema applied (all tables + `alembic_version` stamped
+> `0001_baseline`), pgvector 0.8.2 + HNSW/GIN indexes created, private `documents` bucket created, and
+> RLS enabled on all public tables. Steps 1–3 are the from-scratch recipe; for this project you only
+> need to collect the values in **step 4** into `.env`.
+
 1. Create a new Supabase project. Choose a region close to your Render region.
 2. Enable pgvector: SQL Editor → run
    ```sql
@@ -22,15 +28,22 @@ Architecture recap: React/Vite frontend on **Vercel** → FastAPI + Celery on **
    ```
 3. Create a Storage bucket named **`documents`** (must match `SUPABASE_STORAGE_BUCKET`).
    Keep it private; the backend uses the service-role key.
-4. Collect these values (Project Settings):
-   - **DATABASE_URL** — build the async form for SQLAlchemy:
-     `postgresql+asyncpg://postgres:<db-password>@<host>:5432/postgres`
-     (Use the direct connection host/port from Database settings. Alembic derives the sync
-     `+psycopg` URL automatically.)
-   - **SUPABASE_URL** — `https://<project-ref>.supabase.co`
-   - **SUPABASE_SERVICE_KEY** — the service-role key (secret; never ship to the frontend).
+4. Collect these values into `.env` (never commit them):
+   - **DATABASE_URL** — dashboard → **Connect** → **Session pooler**, then change the scheme to
+     `postgresql+asyncpg://<user>:<db-password>@<pooler-host>:5432/postgres`. Use the **session
+     pooler** (IPv4, port 5432): the direct `db.<ref>.supabase.co` host is IPv6-only (often
+     unreachable from Render), and the **transaction** pooler (port 6543) breaks asyncpg/psycopg
+     prepared statements. Alembic derives the sync `+psycopg` URL automatically.
+   - **SUPABASE_URL** — `https://<project-ref>.supabase.co` (this project:
+     `https://tisgrflxwgwpqwcszzfw.supabase.co`).
+   - **SUPABASE_SERVICE_KEY** — Settings → API → **service_role** key (secret; never ship to the frontend).
 
 ## 2. Run database migrations against Supabase
+
+> ✅ Already applied for this project via MCP — `alembic_version` is stamped `0001_baseline`, so the
+> command below (and Render's build-time `alembic upgrade head`) is a **no-op** that only confirms
+> connectivity. Still worth running once locally to verify your `DATABASE_URL` reaches Supabase
+> before the first deploy.
 
 From a machine with the backend deps installed, pointing at the Supabase DB:
 
@@ -54,9 +67,7 @@ confirms connectivity and that pgvector is enabled before the first deploy.)
    | `DATABASE_URL`         |  ✓  |   ✓    | Step 1 (async asyncpg form)           |
    | `SUPABASE_URL`         |  ✓  |   ✓    | Step 1                                |
    | `SUPABASE_SERVICE_KEY` |  ✓  |   ✓    | Step 1                                |
-   | `OPENROUTER_API_KEY`   |  ✓  |   ✓    | OpenRouter                            |
-   | `EMBEDDINGS_API_KEY`   |  ✓  |   ✓    | DeepInfra                             |
-   | `RERANK_API_KEY`       |  ✓  |   ✓    | DeepInfra                             |
+   | `OPENROUTER_API_KEY`   |  ✓  |   ✓    | OpenRouter (also powers embeddings + rerank) |
    | `CLERK_JWKS_URL`       |  ✓  |        | Step 6                                |
    | `CLERK_ISSUER`         |  ✓  |        | Step 6                                |
    | `CLERK_AUDIENCE`       |  ✓  |        | Step 6 (**required in prod**)         |
@@ -65,6 +76,11 @@ confirms connectivity and that pgvector is enabled before the first deploy.)
 
    Non-secret vars are already baked into `render.yaml` (`ENVIRONMENT=production`,
    `SUPABASE_STORAGE_BUCKET=documents`, `MAX_UPLOAD_MB=25`, `PYTHON_VERSION`, `REDIS_URL`).
+
+   > Embeddings + rerank run on OpenRouter's free NVIDIA Nemotron models and **reuse
+   > `OPENROUTER_API_KEY`** — there is no separate DeepInfra key. The optional `EMBEDDINGS_API_KEY` /
+   > `RERANK_API_KEY` overrides are not part of the blueprint; leave them unset unless you want to
+   > point embeddings/rerank at a different provider.
 3. Deploy. Wait for the API health check at `/api/health` to go green.
 4. Note the **API URL**: `https://<notebooklm-api>.onrender.com`.
 

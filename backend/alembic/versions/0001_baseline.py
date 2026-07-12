@@ -18,8 +18,9 @@ down_revision: str | None = None
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Embedding dimension is pinned to bge-m3's 1024. Changing the embedding model to a
-# different dimension requires a new migration + re-embed of all chunks/notes.
+# Embedding dimension is pinned to 1024. The embedder (NVIDIA Nemotron via OpenRouter) emits
+# 2048-d vectors that are Matryoshka-truncated to 1024 in app/embedding/client.py. Changing the
+# stored dimension requires a new migration + re-embed of all chunks/notes.
 EMBED_DIM = 1024
 
 

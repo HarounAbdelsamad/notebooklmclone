@@ -39,3 +39,4 @@ tmp/
 uploads/
 /.claude
 /CLAUDE.md
+/.mcp.json

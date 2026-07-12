@@ -29,11 +29,11 @@ your accounts/secrets) and is the only thing between here and a live end-to-end 
 - Storage (`app/services/storage.py`) with Supabase + local `./uploads` dev fallback.
 - Celery + Redis wiring; ingestion pipeline (`app/ingestion/pipeline.py`):
   `extract → clean → semantic-chunk (20% overlap) → embed → store` with per-stage status.
-- 8 format parsers; semantic chunker with recursive fallback; bge-m3 embeddings. Frontend upload +
-  processing-status polling.
+- 8 format parsers; semantic chunker with recursive fallback; embeddings via OpenRouter (NVIDIA
+  Nemotron, truncated to 1024-d). Frontend upload + processing-status polling.
 
 ### Phase 3 — RAG chat + streaming + citations
-- Hybrid retrieval = pgvector ⊕ Postgres FTS via **RRF** + bge-reranker (`app/retrieval/hybrid.py`).
+- Hybrid retrieval = pgvector ⊕ Postgres FTS via **RRF** + Nemotron rerank (`app/retrieval/hybrid.py`).
 - Query rewrite + context assembly in `app/chat/orchestrator.py` / `app/chat/memory.py`;
   OpenRouter streaming (`app/services/llm.py`).
 - SSE event contract (`start → token* → citations → done` / `error`); citation persistence +
@@ -94,27 +94,35 @@ your accounts/secrets) and is the only thing between here and a live end-to-end 
 
 ## 📝 Manual steps for you (before live e2e — see `DEPLOY.md` for exact commands)
 
-These need your own accounts/secrets and create real (billable) cloud resources, so they were left
-for you rather than run automatically:
+### ✅ Supabase — already provisioned via MCP (project `NotebookLMClone` / `tisgrflxwgwpqwcszzfw`, eu-west-1)
+- Baseline schema applied — all 11 tables + `alembic_version` stamped `0001_baseline`, so Render's
+  build-time `alembic upgrade head` is a clean no-op. pgvector 0.8.2 + HNSW + GIN indexes created.
+- Private `documents` storage bucket created.
+- **RLS enabled** on all public tables — safe because the `postgres` (DATABASE_URL) and `service_role`
+  roles both have `BYPASSRLS`, so the backend/Storage are unaffected while the anon/PostgREST surface
+  is closed.
+- **You still set two secret `.env` values yourself** (not exposed via MCP):
+  - Known already: `SUPABASE_URL=https://tisgrflxwgwpqwcszzfw.supabase.co`, `SUPABASE_STORAGE_BUCKET=documents`.
+  - `SUPABASE_SERVICE_KEY` — dashboard → Settings → API → **service_role** secret.
+  - `DATABASE_URL` — dashboard → **Connect** → **Session pooler** string, scheme changed to
+    `postgresql+asyncpg://` (use the session pooler on 5432 — not the IPv6-only direct host, nor the
+    transaction pooler on 6543 which breaks asyncpg prepared statements; see `DEPLOY.md` §1).
 
-1. **Supabase** — create project; enable the `vector` extension; create the `documents` storage
-   bucket; collect `DATABASE_URL` (asyncpg form), service key.
-2. **Migrate** — run `alembic upgrade head` against Supabase (`DEPLOY.md` §2).
-3. **Render** — create a Blueprint from `render.yaml`; set every `sync:false` secret on both the API
-   and worker services.
-4. **Vercel** — new project rooted at `frontend/`; set the `VITE_` env vars (Clerk publishable key,
+### Remaining (your own accounts/secrets)
+1. **Render** — Blueprint from `render.yaml`; set every `sync:false` secret on both the API and worker.
+2. **Vercel** — new project rooted at `frontend/`; set the `VITE_` env vars (Clerk publishable key,
    API base URL, optional Sentry DSN); deploy. Then set `CORS_ORIGINS` on the Render API to the
    resulting Vercel origin.
-5. **Clerk** — configure JWKS URL, issuer, and audience (issuer + audience are **required** in prod;
+3. **Clerk** — configure JWKS URL, issuer, and audience (issuer + audience are **required** in prod;
    the backend now refuses to verify tokens without them).
-6. **Sentry** — set backend `SENTRY_DSN` (Render) and frontend `VITE_SENTRY_DSN` (Vercel).
-7. **GitHub Actions secrets** — `RENDER_DEPLOY_HOOK_URL` (and optionally `VERCEL_DEPLOY_HOOK_URL`).
-8. **Keep-warm** — point an uptime pinger at `/api/health` (`DEPLOY.md` §4).
-9. **Smoke test** — upload → processed → ask → cited answer (`DEPLOY.md` §9).
+4. **Sentry** — set backend `SENTRY_DSN` (Render) and frontend `VITE_SENTRY_DSN` (Vercel).
+5. **GitHub Actions secrets** — `RENDER_DEPLOY_HOOK_URL` (and optionally `VERCEL_DEPLOY_HOOK_URL`).
+6. **Keep-warm** — point an uptime pinger at `/api/health` (`DEPLOY.md` §4).
+7. **Smoke test** — upload → processed → ask → cited answer (`DEPLOY.md` §9).
 
-MCP note: the **Supabase** and **Vercel** connectors are available if you want me to drive some of
-the above interactively, but **Google Drive** and **Hugging Face** connectors are currently
-unauthorized (authorize them in claude.ai connector settings if needed — not required for this deploy).
+MCP note: I can drive the **Vercel** deploy interactively via its connector if you want. The
+**Google Drive** and **Hugging Face** connectors are currently unauthorized (authorize them in
+claude.ai connector settings if needed — not required for this deploy).
 
 ---
 

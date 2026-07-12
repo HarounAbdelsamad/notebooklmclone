@@ -1,5 +1,5 @@
 """Hybrid retrieval: pgvector cosine ANN + Postgres full-text, fused via Reciprocal Rank
-Fusion, then reranked with bge-reranker-v2-m3."""
+Fusion, then reranked with the NVIDIA Nemotron reranker (via OpenRouter)."""
 
 import logging
 import uuid
