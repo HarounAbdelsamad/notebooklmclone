@@ -73,5 +73,8 @@ async def ask(
             notebook=notebook,
             chat_id=payload.chat_id,
             question=payload.question,
-        )
+        ),
+        # sse-starlette defaults to "\r\n" separators, but the frontend SSE parser splits events
+        # on "\n\n" — emit "\n"-delimited events so event boundaries are actually detected.
+        sep="\n",
     )
