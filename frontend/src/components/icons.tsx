@@ -80,3 +80,26 @@ export function GenericOutputIcon(props: SVGProps<SVGSVGElement>) {
     </IconBase>
   );
 }
+
+/** Three vertical dots ("kebab" menu) — used for card overflow menus. */
+export function MoreVerticalIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none" />
+    </IconBase>
+  );
+}
+
+/** Trash can — used for destructive delete actions. */
+export function TrashIcon(props: SVGProps<SVGSVGElement>) {
+  return (
+    <IconBase {...props}>
+      <path d="M4 6.5h16" />
+      <path d="M8.5 6.5V4.8a1.3 1.3 0 0 1 1.3-1.3h4.4a1.3 1.3 0 0 1 1.3 1.3v1.7" />
+      <path d="M6.5 6.5 7.3 19.5a1.5 1.5 0 0 0 1.5 1.4h6.4a1.5 1.5 0 0 0 1.5-1.4l.8-13" />
+      <path d="M10.2 10.5v6.5M13.8 10.5v6.5" />
+    </IconBase>
+  );
+}

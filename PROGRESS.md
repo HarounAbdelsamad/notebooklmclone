@@ -3,9 +3,10 @@
 Status snapshot for the NotebookLM clone. See `CLAUDE.md` for architecture, commands, and
 conventions. Full build plan lives at `~/.claude/plans/this-is-a-new-precious-puddle.md`.
 
-**Overall:** Phases 0–4 complete and verified. All four pre-deploy security findings are fixed.
-Phase 5 deployment **config + docs** are done; the actual cloud **provisioning is manual** (needs
-your accounts/secrets) and is the only thing between here and a live end-to-end run.
+**Overall:** Phases 0–5 complete. **Deployed and verified live end-to-end** — sign-in → upload →
+ingestion (extract → chunk → embed) → pgvector storage → authenticated chat → hybrid retrieval +
+rerank → streamed, cited answer, all against real Supabase + Redis + OpenRouter. All four pre-deploy
+security findings are fixed. Reproduce your own instance with [`DEPLOY.md`](DEPLOY.md).
 
 ---
 
@@ -70,15 +71,23 @@ your accounts/secrets) and is the only thing between here and a live end-to-end 
    is set. `clerk.py` fails closed in production if `CLERK_ISSUER` is unset; audience is optional (Clerk's
    default tokens carry no `aud`) and enforced only when `CLERK_AUDIENCE` is set.
 
-### Phase 5 — Deploy config + docs ✅ (provisioning still manual)
+### Phase 5 — Deploy config + docs + live deploy ✅
 - `render.yaml` — API web + Celery worker + Redis (all `plan: starter` to avoid SSE-breaking cold
   starts). Added `ENVIRONMENT=production` (this is what disables the dev auth-bypass and local-storage
   fallback in prod), `CLERK_AUDIENCE`, `MAX_UPLOAD_MB`, `SUPABASE_STORAGE_BUCKET`.
 - `.github/workflows/ci.yml` — new `deploy` job (push-to-`main`, after tests+build), secret-guarded
   Render deploy hook; Vercel left to its Git integration.
-- `.env.example` (backend + frontend) fully documented; `DEPLOY.md` runbook written with the ordered
-  manual provisioning checklist.
+- `.env.example` (backend + frontend) fully documented; `DEPLOY.md` rewritten as a generic,
+  reproducible "Deploy your own" checklist (Supabase → Clerk → Render → Vercel → CORS → smoke test).
 - Keep-warm: external uptime-pinger approach documented in `DEPLOY.md` (chosen over a paid cron service).
+- **Deployed live** on Vercel + Render + Supabase + Clerk + OpenRouter and verified end-to-end.
+
+#### Post-deploy fixes (found only against the live stack)
+- **Issuer-only Clerk auth** — Clerk's default session tokens carry no `aud` claim, so audience
+  verification is enforced only when `CLERK_AUDIENCE` is set; the backend requires `CLERK_ISSUER` in
+  prod and verifies against JWKS. Documented as "leave `CLERK_AUDIENCE` unset."
+- **SSE separator fix** — the backend now emits `\n`-delimited SSE events so the frontend data-line
+  parser splits events correctly and token spacing is preserved.
 
 ### Verified (in this environment, all changes together)
 | Check | Result |
@@ -92,38 +101,15 @@ your accounts/secrets) and is the only thing between here and a live end-to-end 
 
 ---
 
-## 📝 Manual steps for you (before live e2e — see `DEPLOY.md` for exact commands)
+## 📝 Deploy your own instance
 
-### ✅ Supabase — already provisioned via MCP (project `NotebookLMClone` / `tisgrflxwgwpqwcszzfw`, eu-west-1)
-- Baseline schema applied — all 11 tables + `alembic_version` stamped `0001_baseline`, so Render's
-  build-time `alembic upgrade head` is a clean no-op. pgvector 0.8.2 + HNSW + GIN indexes created.
-- Private `documents` storage bucket created.
-- **RLS enabled** on all public tables — safe because the `postgres` (DATABASE_URL) and `service_role`
-  roles both have `BYPASSRLS`, so the backend/Storage are unaffected while the anon/PostgREST surface
-  is closed.
-- **You still set two secret `.env` values yourself** (not exposed via MCP):
-  - Known already: `SUPABASE_URL=https://tisgrflxwgwpqwcszzfw.supabase.co`, `SUPABASE_STORAGE_BUCKET=documents`.
-  - `SUPABASE_SERVICE_KEY` — dashboard → Settings → API → **service_role** secret.
-  - `DATABASE_URL` — dashboard → **Connect** → **Session pooler** string, scheme changed to
-    `postgresql+asyncpg://` (use the session pooler on 5432 — not the IPv6-only direct host, nor the
-    transaction pooler on 6543 which breaks asyncpg prepared statements; see `DEPLOY.md` §1).
-
-### Remaining (your own accounts/secrets)
-1. **Render** — Blueprint from `render.yaml`; set every `sync:false` secret on both the API and worker.
-2. **Vercel** — new project rooted at `frontend/`; set the `VITE_` env vars (Clerk publishable key,
-   API base URL, optional Sentry DSN); deploy. Then set `CORS_ORIGINS` on the Render API to the
-   resulting Vercel origin.
-3. **Clerk** — configure JWKS URL + issuer (**issuer required in prod**; the backend refuses to
-   verify tokens without it). `CLERK_AUDIENCE` is optional — leave it unset unless you add a Clerk
-   JWT template with an `aud` claim.
-4. **Sentry** — set backend `SENTRY_DSN` (Render) and frontend `VITE_SENTRY_DSN` (Vercel).
-5. **GitHub Actions secrets** — `RENDER_DEPLOY_HOOK_URL` (and optionally `VERCEL_DEPLOY_HOOK_URL`).
-6. **Keep-warm** — point an uptime pinger at `/api/health` (`DEPLOY.md` §4).
-7. **Smoke test** — upload → processed → ask → cited answer (`DEPLOY.md` §9).
-
-MCP note: I can drive the **Vercel** deploy interactively via its connector if you want. The
-**Google Drive** and **Hugging Face** connectors are currently unauthorized (authorize them in
-claude.ai connector settings if needed — not required for this deploy).
+The full, reproducible, generic provisioning guide is [`DEPLOY.md`](DEPLOY.md) — an ordered checklist
+(Supabase → Clerk → Render → Vercel → CORS → smoke test) with all instance-specific values replaced
+by placeholders (`<project-ref>`, `<your-api>`, `<your-app>`, `<your-subdomain>`, `<your-github-repo>`).
+It bakes in the real gotchas learned from the live deploy: session-pooler `DATABASE_URL` (not the
+IPv6 direct host or the 6543 transaction pooler), Blueprint-only Render (the MCP can't create the
+worker), enabling RLS with `BYPASSRLS` service roles, issuer-only Clerk auth, and the
+Vercel-origin/CORS chicken-and-egg ordering.
 
 ---
 
@@ -142,6 +128,7 @@ claude.ai connector settings if needed — not required for this deploy).
 - Full PDF viewer with citation jump-to-page.
 - Additional formats: images/OCR, audio/Whisper, YouTube transcript, epub.
 
-### Not yet run: live end-to-end
-The upload → ready → ask → cited answer flow still hasn't been exercised against a real DB — it's
-gated on the manual provisioning above (needs Supabase + Redis + API keys).
+### Verified: live end-to-end ✅
+The upload → ready → ask → cited answer flow has been exercised against the real deployed stack
+(Supabase + Redis + OpenRouter + Clerk): sign-in → upload → embeddings → pgvector → authenticated
+chat → rerank → streamed cited answer all confirmed working.

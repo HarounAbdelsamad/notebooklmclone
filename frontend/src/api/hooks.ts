@@ -56,6 +56,18 @@ export function useCreateNotebook() {
   });
 }
 
+export function useDeleteNotebook() {
+  const getToken = useToken();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<void>(getToken, `/notebooks/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => invalidate(qc, ["notebooks"]),
+  });
+}
+
 // -------------------------------------------------------------------- documents
 
 export function useDocuments(notebookId: string, poll = false) {

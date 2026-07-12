@@ -61,4 +61,15 @@ cp .env.example .env.local    # fill in Clerk publishable key + API URL
 npm run dev
 ```
 
-See [backend/.env.example](backend/.env.example) and `frontend/.env.example` for required secrets.
+See [backend/.env.example](backend/.env.example) and [frontend/.env.example](frontend/.env.example)
+for required secrets.
+
+## Deploy your own
+
+The app runs on a fully managed stack: **Vercel** (frontend) + **Render** (FastAPI API + Celery
+worker + Redis) + **Supabase** (Postgres/pgvector + Storage) + **Clerk** (auth) + **OpenRouter**
+(LLM + embeddings + rerank), with optional **Sentry** monitoring.
+
+Follow [`DEPLOY.md`](DEPLOY.md) — an ordered, reproducible checklist (Supabase → Clerk → Render →
+Vercel → CORS → smoke test) that provisions everything from a fresh fork using your own accounts and
+secrets.
