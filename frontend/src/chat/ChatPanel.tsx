@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { streamAsk } from "../api/client";
 import { useToken } from "../api/hooks";
 import type { Citation } from "../api/types";
+import { StreamingStatus } from "./StreamingStatus";
 
 interface UiMessage {
   role: "user" | "assistant";
@@ -71,7 +72,12 @@ export function ChatPanel({ notebookId }: { notebookId: string }) {
         )}
         {messages.map((m, i) => (
           <div key={i} className={`msg ${m.role}`}>
-            {m.content || (m.role === "assistant" && streaming ? "…" : "")}
+            {m.content ||
+              (m.role === "assistant" && streaming && i === messages.length - 1 ? (
+                <StreamingStatus />
+              ) : (
+                ""
+              ))}
             {m.citations && m.citations.length > 0 && (
               <div style={{ marginTop: 8 }}>
                 {m.citations.map((c, j) => (

@@ -1,13 +1,22 @@
 import { useState } from "react";
 import { useGenerateOutput, useOutputs } from "../api/hooks";
 import type { OutputType } from "../api/types";
+import { Modal } from "../components/Modal";
+import {
+  BriefingIcon,
+  FaqIcon,
+  StudyGuideIcon,
+  SummaryIcon,
+  TimelineIcon,
+} from "../components/icons";
+import type { SVGProps } from "react";
 
-const TYPES: { type: OutputType; label: string }[] = [
-  { type: "summary", label: "Summary" },
-  { type: "faq", label: "FAQ" },
-  { type: "study_guide", label: "Study guide" },
-  { type: "briefing", label: "Briefing" },
-  { type: "timeline", label: "Timeline" },
+const TYPES: { type: OutputType; label: string; Icon: (props: SVGProps<SVGSVGElement>) => JSX.Element }[] = [
+  { type: "summary", label: "Summary", Icon: SummaryIcon },
+  { type: "faq", label: "FAQ", Icon: FaqIcon },
+  { type: "study_guide", label: "Study guide", Icon: StudyGuideIcon },
+  { type: "briefing", label: "Briefing", Icon: BriefingIcon },
+  { type: "timeline", label: "Timeline", Icon: TimelineIcon },
 ];
 
 export function OutputsPanel({ notebookId }: { notebookId: string }) {
@@ -15,12 +24,20 @@ export function OutputsPanel({ notebookId }: { notebookId: string }) {
   const generate = useGenerateOutput(notebookId);
   const [openId, setOpenId] = useState<string | null>(null);
 
+  const openOutput = outputs?.find((o) => o.id === openId);
+
   return (
     <div>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 12 }}>
-        {TYPES.map((t) => (
-          <button key={t.type} onClick={() => generate.mutate(t.type)}>
-            {t.label}
+      <div className="studio-actions">
+        {TYPES.map(({ type, label, Icon }) => (
+          <button
+            key={type}
+            className="secondary studio-action-btn"
+            onClick={() => generate.mutate(type)}
+            disabled={generate.isPending}
+          >
+            <Icon />
+            <span>{label}</span>
           </button>
         ))}
       </div>
@@ -28,17 +45,20 @@ export function OutputsPanel({ notebookId }: { notebookId: string }) {
         <div key={o.id} className="card" style={{ marginBottom: 10 }}>
           <div
             style={{ display: "flex", justifyContent: "space-between", cursor: "pointer" }}
-            onClick={() => setOpenId(openId === o.id ? null : o.id)}
+            onClick={() => o.content && setOpenId(o.id)}
           >
             <strong>{o.title}</strong>
             <span className="muted">{o.content ? "▾" : "generating…"}</span>
           </div>
-          {openId === o.id && o.content && (
-            <p style={{ whiteSpace: "pre-wrap", marginBottom: 0, fontSize: 14 }}>{o.content}</p>
-          )}
         </div>
       ))}
       {outputs?.length === 0 && <p className="muted">Generate an overview from your sources.</p>}
+
+      {openOutput && openOutput.content && (
+        <Modal title={openOutput.title} onClose={() => setOpenId(null)}>
+          {openOutput.content}
+        </Modal>
+      )}
     </div>
   );
 }
