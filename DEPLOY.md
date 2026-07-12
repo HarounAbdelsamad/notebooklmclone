@@ -70,7 +70,7 @@ confirms connectivity and that pgvector is enabled before the first deploy.)
    | `OPENROUTER_API_KEY`   |  ✓  |   ✓    | OpenRouter (also powers embeddings + rerank) |
    | `CLERK_JWKS_URL`       |  ✓  |        | Step 6                                |
    | `CLERK_ISSUER`         |  ✓  |        | Step 6                                |
-   | `CLERK_AUDIENCE`       |  ✓  |        | Step 6 (**required in prod**)         |
+   | `CLERK_AUDIENCE`       |     |        | Step 6 (optional — usually unset)     |
    | `CORS_ORIGINS`         |  ✓  |        | Step 5 (set after Vercel URL known)   |
    | `SENTRY_DSN`           |  ✓  |        | Step 7 (backend DSN)                  |
 
@@ -104,12 +104,12 @@ exact origin (no trailing slash), e.g. `https://<app>.vercel.app`. Comma-separat
 1. New Vercel project from this repo. Set **Root Directory** to `frontend/`.
    `frontend/vercel.json` handles the Vite build + SPA rewrites.
 2. Configure Clerk first (needed for the keys below):
-   - Create a Clerk application. Note the **Frontend API / JWKS URL**, **Issuer**, and set an
-     **audience** (aud) claim for your API.
+   - Create a Clerk application. Note the **Frontend API / JWKS URL** and **Issuer**.
    - `CLERK_JWKS_URL` = `https://<subdomain>.clerk.accounts.dev/.well-known/jwks.json`
-   - `CLERK_ISSUER`   = `https://<subdomain>.clerk.accounts.dev`
-   - `CLERK_AUDIENCE` = the audience you configured (**issuer AND audience are required in prod**).
-     Put these three on the **Render API** service (Step 3).
+   - `CLERK_ISSUER`   = `https://<subdomain>.clerk.accounts.dev` (**required in prod**)
+   - `CLERK_AUDIENCE` = optional. Clerk's default session tokens carry no `aud` claim, so leave it
+     unset unless you configure a Clerk JWT template with an audience.
+     Put the JWKS URL + issuer on the **Render API** service (Step 3).
 3. Set Vercel env vars (Production):
    - `VITE_CLERK_PUBLISHABLE_KEY` = Clerk `pk_live_...`
    - `VITE_API_BASE_URL` = `https://<notebooklm-api>.onrender.com/api` (include `/api`)

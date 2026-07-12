@@ -21,14 +21,12 @@ def _client() -> PyJWKClient:
 def verify_token(token: str) -> dict:
     """Verify a Clerk-issued RS256 JWT and return its claims. Raises on failure.
 
-    Fails closed in production: issuer and audience MUST be configured there, so the
-    issuer/audience checks can never be silently skipped. Dev/local stays flexible (both
-    optional) to ease running against a test tenant.
+    Fails closed in production: the issuer MUST be configured there. Audience is optional —
+    Clerk's default session tokens carry no ``aud`` claim, so it is only enforced when
+    CLERK_AUDIENCE is set (e.g. via a Clerk JWT template). Dev/local stays flexible.
     """
-    if settings.is_production and (not settings.clerk_issuer or not settings.clerk_audience):
-        raise RuntimeError(
-            "CLERK_ISSUER and CLERK_AUDIENCE must be configured in production to verify tokens"
-        )
+    if settings.is_production and not settings.clerk_issuer:
+        raise RuntimeError("CLERK_ISSUER must be configured in production to verify tokens")
 
     require = ["exp", "iat", "sub"]
     decode_kwargs: dict = {"algorithms": ["RS256"]}

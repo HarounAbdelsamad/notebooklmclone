@@ -67,8 +67,8 @@ your accounts/secrets) and is the only thing between here and a live end-to-end 
    a bounded chunked read that aborts with HTTP 413; cap = `MAX_UPLOAD_MB` (default 25). Content-Length
    is a pre-check only; the streamed byte count is authoritative.
 4. **Auth hardening** — `X-Dev-User` confirmed inert whenever `ENVIRONMENT=production` or `CLERK_JWKS_URL`
-   is set. `clerk.py` fails closed in production if `CLERK_ISSUER`/`CLERK_AUDIENCE` are unset, and requires
-   the `iss`/`aud` claims whenever configured.
+   is set. `clerk.py` fails closed in production if `CLERK_ISSUER` is unset; audience is optional (Clerk's
+   default tokens carry no `aud`) and enforced only when `CLERK_AUDIENCE` is set.
 
 ### Phase 5 — Deploy config + docs ✅ (provisioning still manual)
 - `render.yaml` — API web + Celery worker + Redis (all `plan: starter` to avoid SSE-breaking cold
@@ -113,8 +113,9 @@ your accounts/secrets) and is the only thing between here and a live end-to-end 
 2. **Vercel** — new project rooted at `frontend/`; set the `VITE_` env vars (Clerk publishable key,
    API base URL, optional Sentry DSN); deploy. Then set `CORS_ORIGINS` on the Render API to the
    resulting Vercel origin.
-3. **Clerk** — configure JWKS URL, issuer, and audience (issuer + audience are **required** in prod;
-   the backend now refuses to verify tokens without them).
+3. **Clerk** — configure JWKS URL + issuer (**issuer required in prod**; the backend refuses to
+   verify tokens without it). `CLERK_AUDIENCE` is optional — leave it unset unless you add a Clerk
+   JWT template with an `aud` claim.
 4. **Sentry** — set backend `SENTRY_DSN` (Render) and frontend `VITE_SENTRY_DSN` (Vercel).
 5. **GitHub Actions secrets** — `RENDER_DEPLOY_HOOK_URL` (and optionally `VERCEL_DEPLOY_HOOK_URL`).
 6. **Keep-warm** — point an uptime pinger at `/api/health` (`DEPLOY.md` §4).
